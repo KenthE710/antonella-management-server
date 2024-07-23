@@ -66,3 +66,5 @@ local_settings.py
 
 # Secretos de Django
 secrets.json
+
+test.py
