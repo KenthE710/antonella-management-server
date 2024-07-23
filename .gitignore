@@ -1,0 +1,68 @@
+# Entornos virtuales
+.venv/
+venv/
+env/
+ENV/
+env.bak/
+venv.bak/
+
+# Archivos compilados de Python
+*.py[cod]
+*.py[cod]
+__pycache__/
+*.so
+*.dylib
+*.pyd
+
+# Directorios de configuración de IDEs
+.idea/
+.vscode/
+*.swp
+
+# Archivos de bases de datos locales
+*.sqlite3
+db.sqlite3
+
+# Archivos de migración de Django
+*/migrations/
+*/migrations/*
+
+# Archivos de log
+*.log
+
+# Archivos de prueba
+coverage/
+cover/
+htmlcov/
+.tox/
+nosetests.xml
+coverage.xml
+*.cover
+.hypothesis/
+.pytest_cache/
+
+# Archivos de caché
+*.egg-info/
+.eggs/
+.Python
+*.egg
+*.manifest
+*.spec
+
+# Archivos temporales
+*.tmp
+*.bak
+*.swp
+*.swo
+*.orig
+*.rej
+
+# Otros
+*.DS_Store
+*.pyc
+
+# Configuración de despliegue
+local_settings.py
+
+# Secretos de Django
+secrets.json
