@@ -1,6 +1,0 @@
-[submodule "inventory"]
-	path = inventory
-	url = git@github.com:KenthE710/antonella-management-server-inventory.git
-[submodule "core"]
-	path = core
-	url = git@github.com:KenthE710/antonella-management-server-core.git
