@@ -24,13 +24,13 @@ from rest_framework.documentation import include_docs_urls
 urlpatterns = [
     path("admin/", admin.site.urls),
     path("__debug__/", include("debug_toolbar.urls")),
-    path("cliente/", include("customers.urls")),
+    path("customers/", include("customers.urls")),
     path("inventario/", include("inventory.urls")),
     path("parametros/", include("parameters.urls")),
-    path("servicios/", include("services.urls")),
-    path("personal/", include("staff.urls")),
+    path("services/", include("services.urls")),
+    path("staff/", include("staff.urls")),
     path("users/", include("users.urls")),
-    path("media/", include("media.urls")),
+    path("files/", include("media.urls")),
     path("docs/", include_docs_urls(title="Antonella API")),
 ]
 
