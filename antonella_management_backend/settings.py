@@ -195,8 +195,11 @@ CORS_ALLOWED_ORIGINS = [
     "http://127.0.0.1:4200",
     "http://localhost:4200",
     "http://localhost:8000",
-    *os.environ.get("HOST_URL", "").split(','),
 ]
+
+ENV_CORS_ALLOWED_ORIGINS = os.environ.get("HOST_URL", "").split(',')
+if len(ENV_CORS_ALLOWED_ORIGINS) > 0:
+    CORS_ALLOWED_ORIGINS += ENV_CORS_ALLOWED_ORIGINS
 
 CORS_ALLOW_HEADERS = (
     *default_headers,
