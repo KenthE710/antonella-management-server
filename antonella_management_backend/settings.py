@@ -31,7 +31,7 @@ SECRET_KEY = "django-insecure-1s+=jgtksaok2og4czlhgw8+$0g%_y!$%#urdyfv9^wrbjt=$#
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = os.environ.get("DEBUG", "False") == "True"
 TEST = "test" in sys.argv or "test_coverage" in sys.argv
-USE_SQLITE = True
+USE_SQLITE = os.environ.get("USE_SQLITE", "False") == "True"
 USE_LOCAL_STORAGE = True
 
 ALLOWED_HOSTS = []
@@ -83,7 +83,7 @@ WSGI_APPLICATION = "antonella_management_backend.wsgi.application"
 # Database
 # https://docs.djangoproject.com/en/5.0/ref/settings/#databases
 
-if TEST or (DEBUG and USE_SQLITE):
+if TEST or USE_SQLITE:
     DATABASES = {
         "default": {
             "ENGINE": "django.db.backends.sqlite3",
