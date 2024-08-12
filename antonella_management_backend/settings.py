@@ -29,7 +29,7 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 SECRET_KEY = "django-insecure-1s+=jgtksaok2og4czlhgw8+$0g%_y!$%#urdyfv9^wrbjt=$#"
 
 # SECURITY WARNING: don't run with debug turned on in production!
-DEBUG = True
+DEBUG = os.environ.get("DEBUG", "False") == "True"
 TEST = "test" in sys.argv or "test_coverage" in sys.argv
 USE_SQLITE = True
 USE_LOCAL_STORAGE = True
