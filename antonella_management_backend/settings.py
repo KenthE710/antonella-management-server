@@ -191,14 +191,12 @@ else:
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 
 
-if DEBUG:
-    CORS_ALLOWED_ORIGINS = [
+CORS_ALLOWED_ORIGINS = [
     "http://127.0.0.1:4200",
     "http://localhost:4200",
     "http://localhost:8000",
-    ]
-else:
-    CORS_ALLOWED_ORIGINS = os.environ.get("HOST_URL", "").split(','),
+    *os.environ.get("HOST_URL", "").split(','),
+]
 
 CORS_ALLOW_HEADERS = (
     *default_headers,
