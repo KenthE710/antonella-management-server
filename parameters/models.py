@@ -19,7 +19,7 @@ class Parametro(AuditModel):
     """
 
     codigo = models.CharField(max_length=25, unique=True)
-    valor = models.CharField(max_length=100)
+    valor = models.CharField(max_length=100, blank=True, null=True)
     descripcion = models.CharField(max_length=225, blank=True, null=True)
 
     def __str__(self):

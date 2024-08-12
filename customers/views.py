@@ -13,6 +13,11 @@ class ClienteView(viewsets.ModelViewSet):
     serializer_class = ClienteSerializer
 
     @action(methods=["get"], detail=False)
+    def selector(self, request: Request):
+        queryset = Cliente.objects.active().values("id", "nombre", "apellido")
+        return Response(queryset, status=status.HTTP_200_OK)
+
+    @action(methods=["get"], detail=False)
     def grid(self, request: Request):
         queryset: BaseManager[Cliente] = Cliente.objects.active().all()
 

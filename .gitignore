@@ -67,4 +67,8 @@ local_settings.py
 # Secretos de Django
 secrets.json
 
+minio-data/
+
+frontend/
+media/
 media_files/

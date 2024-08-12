@@ -2,15 +2,18 @@ from rest_framework.request import Request
 from django.db.models import Prefetch
 from rest_framework import viewsets, status
 from rest_framework.response import Response
-from rest_framework.decorators import action
+from rest_framework.decorators import action, permission_classes
 from rest_framework.parsers import MultiPartParser, FormParser, JSONParser
 from django.db.models.manager import BaseManager
 from django.db.models import Sum, Count
+from django.db.models import Q
+from rest_framework.permissions import IsAuthenticated
 
 from .models import Producto, ProductoImg, ProductoMarca, ProductoTipo, Lote
 from .serializers import (
     AssociateImgWithProductSerializer,
     LoteAllSerializer,
+    LoteViewSerializer,
     ProductoAllSerializer,
     ProductoMarcaSelectorSerializer,
     ProductoSelectorSerializer,
@@ -20,6 +23,7 @@ from .serializers import (
     ProductoTipoSelectorSerializer,
     ProductoTipoSerializer,
     LoteSerializer,
+    SimpleProductoImgSerializer,
 )
 
 
@@ -27,8 +31,22 @@ class ProductoView(viewsets.ModelViewSet):
     queryset = Producto.objects.all()
     serializer_class = ProductoSerializer
 
+    @action(methods=["post"], detail=False)
+    def get_by_ids(self, request: Request):
+        ids = request.data.get('ids', [])
+        if not ids:
+            return Response({"msg": "No IDs provided"}, status=status.HTTP_400_BAD_REQUEST)
+        
+        productos = Producto.objects.filter(id__in=ids)
+        serializer = self.get_serializer(productos, many=True)
+        return Response(serializer.data)
+
     @action(methods=["get"], detail=False)
     def grid(self, request: Request):
+        nombre = request.query_params.get("nombre")
+        status = request.query_params.get("status")
+        sku = request.query_params.get("sku")
+        
         productos_queryset: BaseManager[Producto] = (
             Producto.objects.select_related("tipo", "marca")
             .prefetch_related(
@@ -42,8 +60,14 @@ class ProductoView(viewsets.ModelViewSet):
             )
             # .only("tipo__nombre", "marca__nombre" "nombre", "sku", "created_at")
             .active()
-            .all()
         )
+        
+        if nombre:
+            productos_queryset = productos_queryset.filter(nombre__icontains=nombre)
+        if sku:
+            productos_queryset = productos_queryset.filter(sku__icontains=sku)
+        if status:
+            productos_queryset = productos_queryset.filter(posee_existencias=status != 1)
 
         page = self.paginate_queryset(productos_queryset)
         if page is not None:
@@ -57,6 +81,7 @@ class ProductoView(viewsets.ModelViewSet):
                         "sku": prod.sku,
                         "precio": prod.precio,
                         "usos_est": prod.usos_est,
+                        "status": 1 if prod.posee_existencias else 0,
                         "cover": prod.covers[0].url if len(prod.covers) > 0 else "",
                     }
                     for prod in page
@@ -90,16 +115,16 @@ class ProductoView(viewsets.ModelViewSet):
     def list_img(self):
         producto: Producto = self.get_object()
         producto_img_queryset: BaseManager[ProductoImg] = producto.imgs.active().all()
-        # serializer = ProductoImgSerializer(producto_img_queryset, many=True)
+        serializer = SimpleProductoImgSerializer(producto_img_queryset, many=True, context=self.get_serializer_context())
 
         producto_img = [
             {
-                "id": img.id,
-                "is_cover": img.is_cover,
-                "url": img.url,
-                "name": img.name,
+                "id": img['id'],
+                "is_cover": img['is_cover'],
+                "url":  img['imagen'] if img['imagen'] else img['url_imagen_externa'],
+                "name": img['name'],
             }
-            for img in producto_img_queryset
+            for img in serializer.data
         ]
 
         return Response(producto_img, status=status.HTTP_200_OK)
@@ -123,6 +148,15 @@ class ProductoView(viewsets.ModelViewSet):
             headers={"Location": "url"},
         )
 
+    @action(methods=["get"], detail=False)
+    def search(self, request: Request):
+        query = request.query_params.get("q", "")
+        queryset = self.get_queryset().filter(
+            Q(nombre__icontains=query)
+            | Q(sku__icontains=query)
+        )
+        serializer = self.get_serializer(queryset, many=True)
+        return Response(serializer.data, status=status.HTTP_200_OK)
 
 class ProductoImgView(viewsets.ModelViewSet):
     queryset = ProductoImg.objects.all()
@@ -232,6 +266,12 @@ class LoteView(viewsets.ModelViewSet):
             return self.get_paginated_response(serializer.data)
 
         serializer = LoteAllSerializer(queryset, many=True)
+        return Response(serializer.data)
+    
+    @action(methods=["get"], detail=True)
+    def view(self, request: Request, pk=None):
+        lote: Lote = self.get_object()
+        serializer = LoteViewSerializer(lote)
         return Response(serializer.data)
 
 

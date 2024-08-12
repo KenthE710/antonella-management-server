@@ -31,6 +31,7 @@ class AuditModel(models.Model):
 
     class Meta:
         abstract = True
+        ordering = ["created_at"]
         get_latest_by = "created_at"
 
     objects = AuditManager()
@@ -44,3 +45,6 @@ class AuditModel(models.Model):
 
     def is_deleted(self):
         return self.deleted_at is not None
+
+class Test(AuditModel):
+    tiempo_est = models.DurationField(blank=True, null=True)
