@@ -32,7 +32,7 @@ SECRET_KEY = "django-insecure-1s+=jgtksaok2og4czlhgw8+$0g%_y!$%#urdyfv9^wrbjt=$#
 DEBUG = os.environ.get("DEBUG", "False") == "True"
 TEST = "test" in sys.argv or "test_coverage" in sys.argv
 USE_SQLITE = os.environ.get("USE_SQLITE", "False") == "True"
-USE_LOCAL_STORAGE = True
+USE_LOCAL_STORAGE = os.environ.get("USE_LOCAL_STORAGE", "False") == "True"
 
 ALLOWED_HOSTS = []
 
@@ -147,8 +147,8 @@ MEDIA_ROOT = STATIC_ROOT / "media"
 
 AWS_S3_FILE_OVERWRITE = False
 
-if DEBUG or not os.environ.get("AWS_ACCESS_KEY_ID"):
-    if not USE_LOCAL_STORAGE:
+if not USE_LOCAL_STORAGE:
+    if DEBUG:
         # Configuraciones para desarrollo con MinIO
         DEFAULT_FILE_STORAGE = "storages.backends.s3boto3.S3Boto3Storage"
 
@@ -164,25 +164,25 @@ if DEBUG or not os.environ.get("AWS_ACCESS_KEY_ID"):
         AWS_S3_URL_PROTOCOL = "http"
         AWS_S3_USE_SSL = False
         AWS_S3_VERIFY = False
-else:
-    # Configuraciones para producción con DigitalOcean Spaces
-    DEFAULT_FILE_STORAGE = "storages.backends.s3boto3.S3Boto3Storage"
-    STATICFILES_STORAGE = "storages.backends.s3boto3.S3Boto3Storage"
+    else:
+        # Configuraciones para producción con DigitalOcean Spaces
+        DEFAULT_FILE_STORAGE = "storages.backends.s3boto3.S3Boto3Storage"
+        STATICFILES_STORAGE = "storages.backends.s3boto3.S3Boto3Storage"
 
-    AWS_ACCESS_KEY_ID = os.environ.get("AWS_ACCESS_KEY_ID")
-    AWS_SECRET_ACCESS_KEY = os.environ.get("AWS_SECRET_ACCESS_KEY")
-    AWS_STORAGE_BUCKET_NAME = os.environ.get("AWS_STORAGE_BUCKET_NAME")
-    AWS_S3_CUSTOM_DOMAIN = os.environ.get("AWS_S3_CUSTOM_DOMAIN")
-    AWS_S3_REGION_NAME = os.environ.get("AWS_S3_REGION_NAME", "us-east-1")
-    AWS_QUERYSTRING_AUTH = False
+        AWS_ACCESS_KEY_ID = os.environ.get("AWS_ACCESS_KEY_ID")
+        AWS_SECRET_ACCESS_KEY = os.environ.get("AWS_SECRET_ACCESS_KEY")
+        AWS_STORAGE_BUCKET_NAME = os.environ.get("AWS_STORAGE_BUCKET_NAME")
+        AWS_S3_CUSTOM_DOMAIN = os.environ.get("AWS_S3_CUSTOM_DOMAIN")
+        AWS_S3_REGION_NAME = os.environ.get("AWS_S3_REGION_NAME", "us-east-1")
+        AWS_QUERYSTRING_AUTH = False
 
-    # For serving static files directly from S3
-    AWS_S3_URL_PROTOCOL = "https"
-    AWS_S3_USE_SSL = True
-    AWS_S3_VERIFY = True
+        # For serving static files directly from S3
+        AWS_S3_URL_PROTOCOL = "https"
+        AWS_S3_USE_SSL = True
+        AWS_S3_VERIFY = True
 
-    MEDIA_URL = f"{AWS_S3_URL_PROTOCOL}://{AWS_S3_CUSTOM_DOMAIN}/media/"
-    STATIC_URL = f"{AWS_S3_URL_PROTOCOL}://{AWS_S3_CUSTOM_DOMAIN}/static/"
+        MEDIA_URL = f"{AWS_S3_URL_PROTOCOL}://{AWS_S3_CUSTOM_DOMAIN}/media/"
+        STATIC_URL = f"{AWS_S3_URL_PROTOCOL}://{AWS_S3_CUSTOM_DOMAIN}/static/"
 
 
 # Default primary key field type
