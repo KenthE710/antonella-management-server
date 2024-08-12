@@ -198,7 +198,7 @@ if DEBUG:
     "http://localhost:8000",
     ]
 else:
-    CORS_ALLOWED_ORIGINS = os.environ.get("HOST_URL").split(',') if os.environ.get("HOST_URL") else [],
+    CORS_ALLOWED_ORIGINS = os.environ.get("HOST_URL", "").split(','),
 
 CORS_ALLOW_HEADERS = (
     *default_headers,
