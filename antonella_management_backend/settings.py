@@ -240,8 +240,7 @@ INTERNAL_IPS = [
     "127.0.0.1",
 ]
 
-if DEBUG:
-    DOMINIO = "http://localhost:8000"
+DOMINIO = os.environ.get("DOMINIO", "http://localhost:8000");
 
 FRONTEND_ROOT = STATIC_ROOT / "frontend"
 
