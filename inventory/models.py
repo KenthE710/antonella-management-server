@@ -1,73 +1,83 @@
-from django.utils import timezone
-from django.core.exceptions import ValidationError
-from decimal import Decimal
-from django.db import models
-from core.models import AuditModel
 from os import path
+from decimal import Decimal
+
 from django.conf import settings
-from django.core.validators import MinValueValidator
-from django.db.models.signals import post_delete
+from django.utils import timezone
+from django.db import models, transaction
 from django.db.models import Sum
+from django.db.models.signals import post_delete
+from django.core.validators import MinValueValidator
+from django.core.exceptions import ValidationError
+
+from core.models import AuditModel
+from inventory.managers import LoteManager, ProductoManager
 
 
 class ProductoTipo(AuditModel):
     """
-    Modelo de base de datos para el tipo de producto.
-
+    Modelo que representa un tipo de producto en el inventario.
     Atributos:
-    - nombre (str): Nombre del tipo de producto.
-    - descripcion (str): Descripción del tipo de producto.
-
+    - nombre: El nombre del tipo de producto (max_length=50, unique=True).
+    - descripcion: La descripción del tipo de producto (max_length=225, blank=True, null=True).
     Métodos:
-    - __str__(): Devuelve el nombre del tipo de producto como representación en cadena.
+    - __str__: Devuelve el nombre del tipo de producto.
     """
-
-    nombre = models.CharField(max_length=50)
+    
+    
+    nombre = models.CharField(max_length=50, unique=True)
     descripcion = models.CharField(max_length=225, blank=True, null=True)
 
     def __str__(self):
         return self.nombre
 
+    @transaction.atomic
+    def delete(self, using=None, keep_parents=False):
+        self.productos.all().delete()
+        return super().delete(using, keep_parents)
 
 class ProductoMarca(AuditModel):
     """
-    Modelo de base de datos para la marca de un producto.
-
+    Modelo que representa una marca de producto.
     Atributos:
-    - nombre (str): Nombre de la marca del producto.
-
+    - nombre: El nombre de la marca (cadena de caracteres).
     Métodos:
-    - __str__(): Devuelve el nombre de la marca del producto como representación en cadena.
+    - __str__: Devuelve una representación en cadena de la marca.
     """
 
-    nombre = models.CharField(max_length=50)
+    nombre = models.CharField(max_length=50, unique=True)
 
     def __str__(self):
         return self.nombre
 
+    @transaction.atomic
+    def delete(self, using=None, keep_parents=False):
+        self.productos.all().delete()
+        return super().delete(using, keep_parents)
 
 class Producto(AuditModel):
     """
-    Modelo de base de datos para un producto.
-
+    Modelo que representa un producto en el inventario.
     Atributos:
-    - tipo (ProductoTipo): Tipo de producto al que pertenece.
-    - marca (ProductoMarca): Marca del producto, puede ser nula.
-    - nombre (str): Nombre del producto.
-    - sku (str): Código de identificación del producto, puede estar en blanco.
-    - precio (Decimal): Precio del producto.
-    - usos_est (int): Número estimado de usos del producto.
-
+    - tipo: El tipo de producto al que pertenece (ForeignKey a ProductoTipo).
+    - marca: La marca del producto (ForeignKey a ProductoMarca).
+    - nombre: El nombre del producto (CharField de longitud máxima 50).
+    - sku: El código SKU del producto (CharField de longitud máxima 25, opcional).
+    - precio: El precio del producto (DecimalField con 6 dígitos y 2 decimales, valor predeterminado: 0.00).
+    - usos_est: El número de usos estimados del producto (IntegerField, valor predeterminado: 0).
     Métodos:
-    - __str__(): Devuelve el nombre del producto como representación en cadena.
+    - __str__: Devuelve una representación en cadena del producto.
+    - get_posee_existencias: Devuelve True si el producto tiene existencias disponibles, False en caso contrario.
+    - get_existencias: Devuelve la cantidad total de existencias del producto.
+    - get_usos_restantes: Devuelve el número total de usos restantes del producto.
+    - get_lote_to_use: Devuelve el lote más próximo a expirar que tiene usos restantes.
     """
 
-    tipo = models.ForeignKey(ProductoTipo, on_delete=models.CASCADE)
+    tipo = models.ForeignKey(ProductoTipo, on_delete=models.SET_NULL, null=True, related_name="productos")
     marca = models.ForeignKey(
-        ProductoMarca, on_delete=models.SET_NULL, null=True, blank=True
+        ProductoMarca, on_delete=models.SET_NULL, null=True, related_name="productos"
     )
     nombre = models.CharField(max_length=50)
-    sku = models.CharField(max_length=25, blank=True, null=True)
+    sku = models.CharField(max_length=25, null=True)
     precio = models.DecimalField(
         max_digits=6, decimal_places=2, default=Decimal("0.00")
     )
@@ -76,55 +86,64 @@ class Producto(AuditModel):
     def __str__(self):
         return self.nombre
     
+    objects = ProductoManager()
+    
     @property
-    def posee_existencias(self):
-        lotes = self.lotes.filter(retirado=False, fe_exp__gt=timezone.now())
+    def get_posee_existencias(self):
+        lotes = self.lotes.active().filter(retirado=False, fe_exp__gt=timezone.now())
         for lote in lotes:
-            if lote.servicios_restantes > 0:
+            if lote.get_servicios_restantes > 0:
                 return True
     
         return False
     
     @property
-    def existencias(self):
-        lotes = self.lotes.filter(retirado=False, fe_exp__gt=timezone.now())
-        return sum([lote.cant if not lote.consumido else 0 for lote in lotes])
+    def get_existencias(self):
+        lotes = self.lotes.active().filter(retirado=False, fe_exp__gt=timezone.now())
+        return sum([lote.cant if not lote.get_consumido else 0 for lote in lotes])
     
     @property
-    def usos_restantes(self):
-        lotes = self.lotes.filter(retirado=False, fe_exp__gt=timezone.now())
-        return sum([lote.servicios_restantes for lote in lotes])
+    def get_usos_restantes(self):
+        lotes = self.lotes.active().filter(retirado=False, fe_exp__gt=timezone.now())
+        return sum([lote.get_servicios_restantes for lote in lotes])
     
     @property
-    def getLoteToUse(self):
-        lotes = self.lotes.filter(retirado=False, fe_exp__gt=timezone.now()).order_by('fe_exp').all()
+    def get_lote_to_use(self):
+        lotes = self.lotes.active().filter(retirado=False, fe_exp__gt=timezone.now()).order_by('fe_exp').all()
         
         for lote in lotes:
-            if lote.servicios_restantes > 0:
+            if lote.get_servicios_restantes > 0:
                 return lote
 
+    @transaction.atomic
+    def delete(self, using=None, keep_parents=False):
+        self.imgs.all().delete()
+        self.lotes.all().delete()
+        self.servicios.clear()
+        self.servicio_realizado_productos.all().delete()
+        
+        return super().delete(using, keep_parents)
 
 class ProductoImg(AuditModel):
     """
-    Modelo de base de datos para una imagen de un producto.
-
+    Modelo que representa una imagen de un producto.
     Atributos:
-    - producto (Producto): Producto al que pertenece la imagen.
-    - imagen (str): Archivo de imagen del producto.
-    - url_imagen_externa (str): URL de la imagen del producto.
-    - nombre (str): Nombre del producto.
-    - is_cover (bool): Indica si la imagen es la portada del producto.
-    - is_temp (bool): Indica si la imagen es temporal.
-
+    - producto: El producto al que pertenece la imagen.
+    - imagen: La imagen del producto.
+    - url_imagen_externa: La URL de una imagen externa.
+    - is_cover: Indica si la imagen es la imagen de portada del producto.
+    - is_temp: Indica si la imagen es temporal.
     Métodos:
-    - __str__(): Devuelve la URL de la imagen como representación en cadena.
-    """
+    - __str__: Devuelve la URL de la imagen o la URL de la imagen externa.
+    - name: Devuelve el nombre de la imagen.
+    - url: Devuelve la URL de la imagen o la URL de la imagen externa.
+    """    
 
     producto = models.ForeignKey(
-        Producto, on_delete=models.CASCADE, related_name="imgs", blank=True, null=True
+        Producto, on_delete=models.SET_NULL, null=True, related_name="imgs"
     )
-    imagen = models.ImageField(upload_to="img/", blank=True, null=True)
-    url_imagen_externa = models.URLField(max_length=2083, blank=True, null=True)
+    imagen = models.ImageField(upload_to="img/productos/", null=True)
+    url_imagen_externa = models.URLField(max_length=2083, null=True)
     is_cover = models.BooleanField(default=False)
     is_temp = models.BooleanField(default=False)
 
@@ -159,30 +178,37 @@ class ProductoImg(AuditModel):
 
 class Lote(AuditModel):
     """
-    Modelo de base de datos para un lote de productos.
-
+    Clase que representa un lote de productos.
     Atributos:
-    - producto (Producto): Producto al que pertenece el lote.
-    - fe_compra (datetime): Fecha y hora de compra del lote, puede estar en blanco.
-    - fe_exp (datetime): Fecha y hora de expiración del lote, puede estar en blanco.
-    - cant (int): Cantidad de productos en el lote.
-    - costo (Decimal): Costo del lote.
-    - consumido (bool): Indica si el lote ha sido consumido.
-    - retirado (bool): Indica si el lote ha sido retirado.
-
+    - producto: Producto al que pertenece el lote.
+    - fe_compra: Fecha y hora de compra del lote (opcional).
+    - fe_exp: Fecha y hora de expiración del lote (opcional).
+    - cant: Cantidad de productos en el lote (por defecto: 1).
+    - costo: Costo del lote (por defecto: 0.00).
+    - retirado: Indica si el lote ha sido retirado (por defecto: False).
     Métodos:
-    - __str__(): Devuelve una representación en cadena del lote con el nombre del producto.
-    """
+    - __str__(): Devuelve una representación en cadena del lote.
+    - clean(): Valida que el costo del lote sea menor al precio del producto asociado.
+    - delete(using=None, keep_parents=False): Elimina el lote y envía una señal de eliminación.
+    - is_expired(): Verifica si el lote ha expirado.
+    - get_consumido: Propiedad que indica si el lote ha sido completamente consumido.
+    - get_state: Propiedad que devuelve el estado del lote (0: Activo, 1: Consumido, 2: Retirado, 3: Vencido).
+    - get_servicios_Realizados: Propiedad que devuelve la cantidad de servicios realizados con el lote.
+    - get_servicios_restantes: Propiedad que devuelve la cantidad de servicios restantes para el lote.
+    """    
 
     producto = models.ForeignKey(Producto, on_delete=models.CASCADE, related_name="lotes")
     fe_compra = models.DateTimeField(blank=True, null=True)
     fe_exp = models.DateTimeField(blank=True, null=True)
     cant = models.PositiveIntegerField(default=1, validators=[MinValueValidator(1)])
     costo = models.DecimalField(max_digits=6, decimal_places=2, default=Decimal("0.00"))
+    #TODO: Definir como un campo de estado
     retirado = models.BooleanField(default=False)
 
     def __str__(self):
         return f"Lote de {self.producto.nombre}"
+
+    objects = LoteManager()
 
     def clean(self):
         if self.costo >= self.producto.precio:
@@ -190,7 +216,10 @@ class Lote(AuditModel):
                 "El costo del lote debe ser menor que el precio del producto asociado."
             )
             
+    @transaction.atomic
     def delete(self, using=None, keep_parents=False):
+        self.servicio_realizado_productos.all().delete()
+        
         super().delete(using, keep_parents)
         post_delete.send(sender=self.__class__, instance=self)
     
@@ -200,12 +229,12 @@ class Lote(AuditModel):
         return False
     
     @property
-    def consumido(self):
-        return self.servicios_restantes == 0
+    def get_consumido(self):
+        return self.get_servicios_restantes == 0
 
     @property
-    def state(self):
-        if self.consumido:
+    def get_state(self):
+        if self.get_consumido:
             return 1 #"Consumido"
         elif self.retirado:
             return 2 #"Retirado"
@@ -214,10 +243,10 @@ class Lote(AuditModel):
         return 0 #"Activo"
 
     @property
-    def servicios_Realizados(self):
+    def get_servicios_Realizados(self):
         from services.models import ServicioRealizadoProducto
         return ServicioRealizadoProducto.objects.active().filter(lote=self).aggregate(Sum('cantidad', default=0))["cantidad__sum"] or 0
     
     @property
-    def servicios_restantes(self):
-        return self.producto.usos_est * self.cant - self.servicios_Realizados
+    def get_servicios_restantes(self):
+        return self.producto.usos_est * self.cant - self.get_servicios_Realizados

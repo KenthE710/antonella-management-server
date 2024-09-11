@@ -40,20 +40,21 @@ class Command(BaseCommand):
 
     def populate_producto(self, fake: Faker):
         for _ in range(50):
-            producto, tipo_nombre = fake.beauty_product()
-            tipo, _ = ProductoTipo.objects.get_or_create(
-                nombre=tipo_nombre, descripcion=fake.sentence(nb_words=10)
-            )
-            marca_nombre = fake.beauty_brand()
-            marca, _ = ProductoMarca.objects.get_or_create(nombre=marca_nombre)
-            Producto.objects.create(
-                tipo=tipo,
-                marca=marca,
-                nombre=producto,
-                sku=generar_sku(),
-                precio=fake.pydecimal(min_value=0, right_digits=2, left_digits=4),
-                usos_est=random.randint(1, 10),
-            )
+            try:
+                producto, tipo_nombre = fake.beauty_product()
+                tipo, _ = ProductoTipo.objects.get_or_create(nombre=tipo_nombre)
+                marca_nombre = fake.beauty_brand()
+                marca, _ = ProductoMarca.objects.get_or_create(nombre=marca_nombre)
+                Producto.objects.create(
+                    tipo=tipo,
+                    marca=marca,
+                    nombre=producto,
+                    sku=generar_sku(),
+                    precio=fake.pydecimal(min_value=0, right_digits=2, left_digits=4),
+                    usos_est=random.randint(1, 10),
+                )
+            except:
+                pass
 
     def populate_lote(self, fake: Faker):
         productos = Producto.objects.active().all()

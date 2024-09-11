@@ -66,6 +66,9 @@ class ProductoSerializer(ExcludeAbstractFieldsMixin, serializers.ModelSerializer
 class ProductoAllSerializer(ExcludeAbstractFieldsMixin, serializers.ModelSerializer):
     tipo = ProductoTipoSerializer()
     marca = ProductoMarcaSerializer()
+    posee_existencias = serializers.SerializerMethodField()
+    existencias = serializers.SerializerMethodField()
+    usos_restantes = serializers.SerializerMethodField()
 
     class Meta:
         model = Producto
@@ -82,6 +85,14 @@ class ProductoAllSerializer(ExcludeAbstractFieldsMixin, serializers.ModelSeriali
             "usos_restantes",
         ]
 
+    def get_posee_existencias(self, obj):
+        return obj.get_posee_existencias
+    
+    def get_existencias(self, obj):
+        return obj.get_existencias
+    
+    def get_usos_restantes(self, obj):
+        return obj.get_usos_restantes
 
 class ProductoSelectorSerializer(
     ExcludeAbstractFieldsMixin, serializers.ModelSerializer
@@ -89,10 +100,34 @@ class ProductoSelectorSerializer(
     class Meta:
         model = Producto
         fields = ["id", "nombre", "sku"]
+        
+class ProductoOfServicioSerializer(
+    ExcludeAbstractFieldsMixin, serializers.ModelSerializer
+):
+    existencias = serializers.SerializerMethodField()
+    class Meta:
+        model = Producto
+        fields = ["id", "nombre", "sku", "existencias"]
 
+    def get_existencias(self, obj):
+        return obj.get_existencias
+
+class ProductosServicioGridSerializer(
+    ExcludeAbstractFieldsMixin, serializers.ModelSerializer
+):
+    usos_restantes = serializers.SerializerMethodField()
+    
+    class Meta:
+        model = Producto
+        fields = ["id", "nombre", "sku", "usos_restantes"]
+        
+    def get_usos_restantes(self, obj):
+        return obj.get_usos_restantes
 
 class LoteAllSerializer(ExcludeAbstractFieldsMixin, serializers.ModelSerializer):
     producto = ProductoSelectorSerializer()
+    consumido = serializers.SerializerMethodField()
+    state = serializers.SerializerMethodField()
 
     class Meta:
         model = Lote
@@ -107,9 +142,19 @@ class LoteAllSerializer(ExcludeAbstractFieldsMixin, serializers.ModelSerializer)
             "retirado",
             "state",
         ]
+        
+    def get_consumido(self, obj):
+        return obj.get_consumido
+
+    def get_state(self, obj):
+        return obj.get_state
 
 class LoteViewSerializer(ExcludeAbstractFieldsMixin, serializers.ModelSerializer):
     producto = ProductoSelectorSerializer()
+    consumido = serializers.SerializerMethodField()
+    state = serializers.SerializerMethodField()
+    servicios_Realizados = serializers.SerializerMethodField()
+    servicios_restantes = serializers.SerializerMethodField()
 
     class Meta:
         model = Lote
@@ -126,3 +171,21 @@ class LoteViewSerializer(ExcludeAbstractFieldsMixin, serializers.ModelSerializer
             "servicios_Realizados",
             "servicios_restantes",
         ]
+        
+    def get_consumido(self, obj):
+        return obj.get_consumido
+    
+    def get_state(self, obj):
+        return obj.get_state
+
+    def get_servicios_Realizados(self, obj):
+        return obj.get_servicios_Realizados
+    
+    def get_servicios_restantes(self, obj):
+        return obj.get_servicios_restantes
+    
+class ProductosMasUsadosSerializer(serializers.Serializer):
+    id = serializers.IntegerField(source='producto__id')
+    nombre = serializers.CharField(source='producto__nombre')
+    sku = serializers.CharField(source='producto__sku')
+    usos = serializers.IntegerField()

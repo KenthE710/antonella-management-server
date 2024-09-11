@@ -29,7 +29,12 @@ def login(request):
     username = request.data.get("username")
     password = request.data.get("password")
 
-    user = get_object_or_404(User, username=username)
+    try:
+        user = User.objects.get(username=username)
+    except User.DoesNotExist:
+        return Response(
+            {"status": 400, "msg": "usuario no encontrado"}
+        )
 
     if not user.check_password(password):
         return Response(
