@@ -32,6 +32,7 @@ from .serializers import (
     ProductoTipoSelectorSerializer,
     ProductoTipoSerializer,
     LoteSerializer,
+    ProductoWithExistenciasSerializer,
     ProductosMasUsadosSerializer,
     SimpleProductoImgSerializer,
 )
@@ -609,4 +610,16 @@ class StatisticsViewSet(viewsets.ModelViewSet):
         
         data = Lote.objects.active().filter(retirado=False, fe_exp__range=[fecha_actual, fecha_limite]).order_by("fe_exp")
         serializer = LoteAllSerializer(data, many=True)
+        return Response(serializer.data)
+    
+    @action(detail=False, methods=["get"])
+    def productos_cerca_de_agotar(self, request):
+        """
+        Retorna una lista de los productos que están cerca de agotar sus existencias.
+        """
+        umbral_existencias = int(request.query_params.get('umbral', 10))
+        
+        productos_cerca_de_agotar = Producto.objects.active().with_existencias().filter(existencias__lte=umbral_existencias)
+        
+        serializer = ProductoWithExistenciasSerializer(productos_cerca_de_agotar, many=True)
         return Response(serializer.data)

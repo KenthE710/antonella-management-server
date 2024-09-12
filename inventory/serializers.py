@@ -62,6 +62,14 @@ class ProductoSerializer(ExcludeAbstractFieldsMixin, serializers.ModelSerializer
         model = Producto
         fields = "__all__"
 
+class ProductoWithExistenciasSerializer(ExcludeAbstractFieldsMixin, serializers.ModelSerializer):
+    existencias = serializers.SerializerMethodField()
+    class Meta:
+        model = Producto
+        fields = "__all__"
+        
+    def get_existencias(self, obj):
+        return obj.get_existencias
 
 class ProductoAllSerializer(ExcludeAbstractFieldsMixin, serializers.ModelSerializer):
     tipo = ProductoTipoSerializer()

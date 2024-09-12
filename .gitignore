@@ -72,3 +72,6 @@ minio-data/
 frontend/
 media/
 media_files/
+
+# Variables de entorno
+.env
