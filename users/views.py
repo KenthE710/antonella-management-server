@@ -68,6 +68,7 @@ def login(request):
                     if userSerializer.data.get("profile")
                     else ""
                 ),
+                "is_superuser": userSerializer.data.get("is_superuser"),
             },
         },
         status=status.HTTP_200_OK,

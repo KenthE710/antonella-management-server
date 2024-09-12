@@ -40,10 +40,10 @@ class AuditModel(models.Model):
     
     created_by = models.CharField(max_length=25, default="root", editable=False)
     created_at = models.DateTimeField(auto_now_add=True, editable=False)
-    updated_by = models.CharField(max_length=25, null=True)
+    updated_by = models.CharField(max_length=25, null=True, blank=True)
     updated_at = models.DateTimeField(auto_now=True, null=True)
-    deleted_by = models.CharField(max_length=25, null=True)
-    deleted_at = models.DateTimeField(null=True)
+    deleted_by = models.CharField(max_length=25, null=True, blank=True)
+    deleted_at = models.DateTimeField(null=True, blank=True)
 
     class Meta:
         abstract = True

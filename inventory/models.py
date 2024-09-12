@@ -185,6 +185,7 @@ class Lote(AuditModel):
     - fe_exp: Fecha y hora de expiración del lote (opcional).
     - cant: Cantidad de productos en el lote (por defecto: 1).
     - costo: Costo del lote (por defecto: 0.00).
+    - motivo: Motivo de la eliminación del lote (opcional).
     - retirado: Indica si el lote ha sido retirado (por defecto: False).
     Métodos:
     - __str__(): Devuelve una representación en cadena del lote.
@@ -202,6 +203,7 @@ class Lote(AuditModel):
     fe_exp = models.DateTimeField(blank=True, null=True)
     cant = models.PositiveIntegerField(default=1, validators=[MinValueValidator(1)])
     costo = models.DecimalField(max_digits=6, decimal_places=2, default=Decimal("0.00"))
+    motivo = models.CharField(max_length=225, blank=True, null=True)
     #TODO: Definir como un campo de estado
     retirado = models.BooleanField(default=False)
 

@@ -125,7 +125,7 @@ class ProductoView(viewsets.ModelViewSet):
                     "precio": prod.precio,
                     "usos_est": prod.usos_est,
                     "status": 1 if prod.posee_existencias else 0,
-                    "cover": prod.covers[0].url if len(prod.covers) > 0 else "",
+                    "cover": request.build_absolute_uri(prod.covers[0].url) if len(prod.covers) > 0 else "",
                 }
                 for prod in page
             ]
@@ -445,6 +445,11 @@ class LoteView(viewsets.ModelViewSet):
         serializer = LoteViewSerializer(lote)
         return Response(serializer.data)
 
+    def perform_destroy(self, instance):
+        motivo = self.request.query_params.get("motivo", "")
+        instance.motivo = motivo
+        instance.save()
+        instance.delete()
 
 class StatisticsViewSet(viewsets.ModelViewSet):
     queryset = Producto.objects.all()
