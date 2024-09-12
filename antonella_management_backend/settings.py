@@ -36,6 +36,10 @@ USE_LOCAL_STORAGE = os.environ.get("USE_LOCAL_STORAGE", "False") == "True"
 
 ALLOWED_HOSTS = []
 
+ENV_ALLOWED_HOSTS = os.environ.get("ALLOWED_HOSTS", "").split(',')
+if len(ENV_ALLOWED_HOSTS) > 0:
+    ALLOWED_HOSTS += ENV_ALLOWED_HOSTS
+
 # Application definition
 
 INSTALLED_APPS = [
