@@ -82,6 +82,8 @@ class Producto(AuditModel):
         max_digits=6, decimal_places=2, default=Decimal("0.00")
     )
     usos_est = models.PositiveIntegerField(default=0)
+    maximo = models.PositiveIntegerField(default=0)
+    minimo = models.PositiveIntegerField(default=0)
 
     def __str__(self):
         return self.nombre
@@ -224,6 +226,31 @@ class Lote(AuditModel):
         
         super().delete(using, keep_parents)
         post_delete.send(sender=self.__class__, instance=self)
+    
+    def save(self, *args, **kwargs):
+        producto = self.producto
+        
+        if self.pk is not None:
+            # Si el objeto ya existe, obtener la cantidad anterior antes de que sea actualizada
+            cantidad_anterior = type(self).objects.get(pk=self.pk).cant
+        else:
+            # Si es un nuevo registro, la cantidad anterior es 0
+            cantidad_anterior = 0
+        
+        if producto.maximo is not None and producto.minimo is not None:
+            existencias_actuales = producto.get_existencias or 0
+            existencias = existencias_actuales - int(cantidad_anterior) + int(self.cant)
+            
+            if existencias < producto.minimo:
+                raise Exception(
+                    f"Existencias menores al mínimo, minimo: {producto.minimo} existencias: {existencias_actuales}"
+                )
+            elif existencias > producto.maximo:
+                raise Exception(
+                    f"Existencias mayores al máximo permitido, maximo: {producto.maximo} existencias: {existencias_actuales}"
+                )
+                
+        super().save(*args, **kwargs)
     
     def is_expired(self):
         if self.fe_exp:

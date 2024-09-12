@@ -88,6 +88,8 @@ class ProductoAllSerializer(ExcludeAbstractFieldsMixin, serializers.ModelSeriali
             "sku",
             "precio",
             "usos_est",
+            "maximo",
+            "minimo",
             "posee_existencias",
             "existencias",
             "usos_restantes",

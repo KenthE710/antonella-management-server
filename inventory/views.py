@@ -51,7 +51,7 @@ class ProductoView(viewsets.ModelViewSet):
                 {"msg": "No IDs provided"}, status=status.HTTP_400_BAD_REQUEST
             )
 
-        productos = Producto.objects.filter(id__in=ids)
+        productos = Producto.objects.active().filter(id__in=ids)
         serializer = self.get_serializer(productos, many=True)
         return Response(serializer.data)
 
@@ -125,6 +125,8 @@ class ProductoView(viewsets.ModelViewSet):
                     "sku": prod.sku,
                     "precio": prod.precio,
                     "usos_est": prod.usos_est,
+                    "maximo": prod.maximo,
+                    "minimo": prod.minimo,
                     "status": 1 if prod.posee_existencias else 0,
                     "cover": request.build_absolute_uri(prod.covers[0].url) if len(prod.covers) > 0 else "",
                 }
@@ -444,6 +446,36 @@ class LoteView(viewsets.ModelViewSet):
     def view(self, request: Request, pk=None):
         lote: Lote = self.get_object()
         serializer = LoteViewSerializer(lote)
+        return Response(serializer.data)
+
+    def create(self, request, *args, **kwargs):
+        serializer = self.get_serializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        
+        try:
+            self.perform_create(serializer)
+        except Exception as e:
+            return Response({"msg": str(e)}, status=status.HTTP_400_BAD_REQUEST)
+        
+        headers = self.get_success_headers(serializer.data)
+        return Response(serializer.data, status=status.HTTP_201_CREATED, headers=headers)
+
+    def update(self, request, *args, **kwargs):
+        partial = kwargs.pop('partial', False)
+        instance = self.get_object()
+        serializer = self.get_serializer(instance, data=request.data, partial=partial)
+        serializer.is_valid(raise_exception=True)
+        
+        try:
+            self.perform_update(serializer)
+        except Exception as e:
+            return Response({"msg": str(e)}, status=status.HTTP_400_BAD_REQUEST)
+
+        if getattr(instance, '_prefetched_objects_cache', None):
+            # If 'prefetch_related' has been applied to a queryset, we need to
+            # forcibly invalidate the prefetch cache on the instance.
+            instance._prefetched_objects_cache = {}
+
         return Response(serializer.data)
 
     def perform_destroy(self, instance):
