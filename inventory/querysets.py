@@ -30,9 +30,13 @@ class LoteQuerySet(AuditQuerySet):
         )
 
         return self.annotate(
-            servicios_realizados=Coalesce(Subquery(
-                servicios_realizados_subquery, output_field=IntegerField(), 
-            ), 0),
+            servicios_realizados=Coalesce(
+                Subquery(
+                    servicios_realizados_subquery,
+                    output_field=IntegerField(),
+                ),
+                0,
+            ),
             servicios_restantes=ExpressionWrapper(
                 F("producto__usos_est") * F("cant") - F("servicios_realizados"),
                 output_field=IntegerField(),
@@ -70,11 +74,13 @@ class ProductoQuerySet(AuditQuerySet):
         existencias_subquery = (
             Lote.objects.active()
             .filter(producto=OuterRef("pk"), retirado=False, fe_exp__gt=timezone.now())
-            .values("cant")
+            .values("producto")
             .annotate(total=Sum("cant", default=0))
             .values("total")
         )
 
         return self.annotate(
-            existencias=Subquery(existencias_subquery, output_field=IntegerField())
+            existencias=Coalesce(
+                Subquery(existencias_subquery, output_field=IntegerField()), 0
+            )
         )

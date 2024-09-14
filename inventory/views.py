@@ -651,7 +651,7 @@ class StatisticsViewSet(viewsets.ModelViewSet):
         """
         umbral_existencias = int(request.query_params.get('umbral', 10))
         
-        productos_cerca_de_agotar = Producto.objects.active().with_existencias().filter(existencias__lte=umbral_existencias)
+        productos_cerca_de_agotar = Producto.objects.active().with_existencias().filter(existencias__range=[1, umbral_existencias])
         
         serializer = ProductoWithExistenciasSerializer(productos_cerca_de_agotar, many=True)
         return Response(serializer.data)
