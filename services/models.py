@@ -4,12 +4,11 @@ from typing import Iterable
 from django.db import models, transaction
 from django.utils import timezone
 
-from core.models import AuditModel
+from core.models import AuditModel, ServicioEspecialidad
 from inventory.models import Lote, Producto
 from staff.models import Personal
 from customers.models import Cliente
 from .managers import ServicioManager
-
 
 class ServicioEstado(AuditModel):
     """
@@ -50,6 +49,7 @@ class Servicio(AuditModel):
     - encargado: El encargado del servicio (ForeignKey a Personal, cuando se elimina se establece como NULL, opcional).
     - productos: Los productos asociados al servicio (ManyToManyField a Producto, relacionados como "servicios", opcional).
     - estado: El estado del servicio (ForeignKey a ServicioEstado, cuando se elimina se establece como NULL, opcional).
+    - especialidades: Las especialidades del servicio (ManyToManyField a ServicioEspecialidad, relacionados como "servicios", opcional).
     Métodos:
     - __str__: Retorna el nombre del servicio.
     - save: Guarda el servicio en la base de datos. Si el estado es None, se establece como "ACTIVO".
@@ -65,8 +65,9 @@ class Servicio(AuditModel):
     encargado = models.ForeignKey(
         Personal, on_delete=models.SET_NULL, null=True, related_name="servicios"
     )
-    productos = models.ManyToManyField(Producto, related_name="servicios", null=True)
+    productos = models.ManyToManyField(Producto, related_name="servicios", null=True, blank=True)
     estado = models.ForeignKey(ServicioEstado, on_delete=models.SET_NULL, null=True, related_name="servicios")
+    especialidades = models.ManyToManyField(ServicioEspecialidad, related_name="servicios", null=True, blank=True)
 
     objects = ServicioManager()
 

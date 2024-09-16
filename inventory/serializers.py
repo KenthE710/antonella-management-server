@@ -55,7 +55,37 @@ class LoteSerializer(ExcludeAbstractFieldsMixin, serializers.ModelSerializer):
     class Meta:
         model = Lote
         fields = "__all__"
+        
+    def validate(self, data, **kwargs):
+        force_save = self.context.get('force_save', False)
+        
+        if force_save:
+            return data
+        
+        lote = self.instance if self.instance else Lote(**data)
+        producto = lote.producto
 
+        # Obtener la cantidad anterior si el lote ya existe
+        if self.instance:  # Si el lote ya existe en la base de datos
+            cantidad_anterior = self.instance.cant
+        else:
+            cantidad_anterior = 0  # Si es nuevo, la cantidad anterior es 0
+
+        # Realizar las validaciones de existencias
+        if producto.maximo is not None and producto.minimo is not None:
+            existencias_actuales = producto.get_existencias or 0
+            existencias = existencias_actuales - int(cantidad_anterior) + int(data['cant'])
+            
+            if existencias < producto.minimo:
+                raise serializers.ValidationError(
+                    f"Existencias menores al mínimo, mínimo: {producto.minimo}, existencias: {existencias_actuales}"
+                )
+            elif existencias > producto.maximo:
+                raise serializers.ValidationError(
+                    f"Existencias mayores al máximo permitido, máximo: {producto.maximo}, existencias: {existencias_actuales}"
+                )
+        
+        return data
 
 class ProductoSerializer(ExcludeAbstractFieldsMixin, serializers.ModelSerializer):
     class Meta:

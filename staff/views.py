@@ -46,7 +46,7 @@ class PersonalView(viewsets.ModelViewSet):
             arrayStates = Q()
             for strState in strStates.split(","):
                 arrayStates |= Q(estado__name=strState)
-                
+
             queryset = queryset.filter(arrayStates)
 
         page = self.paginate_queryset(queryset)
@@ -68,10 +68,16 @@ class PersonalView(viewsets.ModelViewSet):
     @action(methods=["get"], detail=False)
     def search(self, request: Request):
         query = request.query_params.get("q", "")
-        queryset = self.get_queryset().filter(
-            Q(nombre__icontains=query)
-            | Q(apellido__icontains=query)
-            | Q(cedula__icontains=query)
+        especialidad = request.query_params.get("especialidad", "").split(",")
+
+        queryset = (
+            self.get_queryset()
+            .filter(especialidades__id__in=especialidad)
+            .filter(
+                Q(nombre__icontains=query)
+                | Q(apellido__icontains=query)
+                | Q(cedula__icontains=query),
+            )
         )
         serializer = self.get_serializer(queryset, many=True)
         return Response(serializer.data, status=status.HTTP_200_OK)

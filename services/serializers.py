@@ -1,6 +1,7 @@
 from rest_framework import serializers
 
 from core.mixin import ExcludeAbstractFieldsMixin
+from core.serializers import ServicioEspecialidadSimpleSerializer
 from inventory.serializers import ProductoOfServicioSerializer, ProductoSelectorSerializer
 from staff.serializers import PersonalNamesSerializer
 from customers.serializers import ClienteSerializer
@@ -31,6 +32,7 @@ class ServicioViewSerializer(ExcludeAbstractFieldsMixin, serializers.ModelSerial
     productos = ProductoOfServicioSerializer(many=True)
     estado = ServicioEstadoSimpleSerializer()
     disponibilidad = serializers.SerializerMethodField()
+    especialidades = ServicioEspecialidadSimpleSerializer(many=True)
     
     class Meta:
         model = Servicio

@@ -37,7 +37,7 @@ class AuditModel(models.Model):
         is_deleted(): Verifica si el registro ha sido eliminado.
     Meta:
     """
-    
+
     created_by = models.CharField(max_length=25, default="root", editable=False)
     created_at = models.DateTimeField(auto_now_add=True, editable=False)
     updated_by = models.CharField(max_length=25, null=True, blank=True)
@@ -62,3 +62,32 @@ class AuditModel(models.Model):
     def is_deleted(self):
         return self.deleted_at is not None
 
+
+class ServicioEspecialidad(AuditModel):
+    """
+    Modelo que representa una especialidad de servicio.
+    Atributos:
+    - nombre: El nombre de la especialidad de servicio.
+    - descripcion: La descripción de la especialidad de servicio.
+    Métodos:
+    - save: Guarda la especialidad de servicio en la base de datos.
+    - __str__: Devuelve una representación en cadena de la especialidad de servicio.
+    """
+
+    nombre = models.CharField(max_length=100, unique=True)
+    descripcion = models.CharField(max_length=225, blank=True, null=True)
+
+    def save(self, *args, **kwargs):
+        self.nombre = self.nombre.upper()
+        super().save(*args, **kwargs)
+
+    def __str__(self):
+        return self.nombre
+
+    def delete(self, using=None, keep_parents=False):
+        for servicio in self.servicios.all():
+            servicio.especialidades.remove(self)
+        """ for personal in self.personal.all():
+            personal.especialidades.remove(self) """
+
+        super().delete(using, keep_parents)

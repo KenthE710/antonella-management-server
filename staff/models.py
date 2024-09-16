@@ -1,6 +1,6 @@
 from django.db import models, transaction
 
-from core.models import AuditModel
+from core.models import AuditModel, ServicioEspecialidad
 
 class PersonalState(AuditModel):
     """
@@ -52,6 +52,7 @@ class Personal(AuditModel):
     direccion = models.CharField(max_length=255, null=True, blank=True)
     fecha_nacimiento = models.DateField(null=True, blank=True)
     estado = models.ForeignKey(PersonalState, on_delete=models.SET_NULL, null=True, related_name='personal')
+    especialidades = models.ManyToManyField(ServicioEspecialidad, related_name="personal", null=True, blank=True)
 
     def __str__(self):
         return f"{self.nombre} {self.apellido}"

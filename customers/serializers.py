@@ -6,4 +6,4 @@ from .models import Cliente
 class ClienteSerializer(ExcludeAbstractFieldsMixin, serializers.ModelSerializer):
     class Meta:
         model = Cliente
-        fields = '__all__'
+        fields = "__all__"

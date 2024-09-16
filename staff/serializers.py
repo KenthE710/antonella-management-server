@@ -1,4 +1,7 @@
 from rest_framework import serializers
+
+from core.serializers import ServicioEspecialidadSimpleSerializer
+
 from .models import Personal, PersonalState
 from core.mixin import ExcludeAbstractFieldsMixin
 
@@ -14,6 +17,7 @@ class PersonalSerializer(ExcludeAbstractFieldsMixin, serializers.ModelSerializer
         
 class PersonalFullSerializer(ExcludeAbstractFieldsMixin, serializers.ModelSerializer):
     estado = PersonalStateSerializer()
+    especialidades = ServicioEspecialidadSimpleSerializer(many=True)
     class Meta:
         model = Personal
         fields = '__all__'

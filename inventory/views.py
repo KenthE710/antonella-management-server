@@ -3,6 +3,7 @@ import datetime
 from decimal import Decimal
 from dateutil import parser
 from django.utils import timezone
+from django.db import transaction
 from django.db.models import (
     Sum,
     Count,
@@ -11,7 +12,7 @@ from django.db.models import (
 )
 from django.db.models.manager import BaseManager
 from rest_framework.request import Request
-from rest_framework import viewsets, status
+from rest_framework import viewsets, status, serializers
 from rest_framework.response import Response
 from rest_framework.pagination import LimitOffsetPagination
 from rest_framework.decorators import action, permission_classes
@@ -128,7 +129,11 @@ class ProductoView(viewsets.ModelViewSet):
                     "maximo": prod.maximo,
                     "minimo": prod.minimo,
                     "status": 1 if prod.posee_existencias else 0,
-                    "cover": request.build_absolute_uri(prod.covers[0].url) if len(prod.covers) > 0 else "",
+                    "cover": (
+                        request.build_absolute_uri(prod.covers[0].url)
+                        if len(prod.covers) > 0
+                        else ""
+                    ),
                 }
                 for prod in page
             ]
@@ -297,13 +302,7 @@ class ProductoMarcaView(viewsets.ModelViewSet):
 
     @action(methods=["get"], detail=False)
     def selector(self, request: Request):
-        queryset = ProductoMarca.objects.only("id", "nombre").active().all()
-
-        page = self.paginate_queryset(queryset)
-        if page is not None:
-            serializer = ProductoMarcaSelectorSerializer(page, many=True)
-            return self.get_paginated_response(serializer.data)
-
+        queryset = ProductoMarca.objects.active().only("id", "nombre").all()
         serializer = ProductoMarcaSelectorSerializer(queryset, many=True)
         return Response(serializer.data)
 
@@ -343,13 +342,7 @@ class ProductoTipoView(viewsets.ModelViewSet):
 
     @action(methods=["get"], detail=False)
     def selector(self, request: Request):
-        queryset = ProductoTipo.objects.only("id", "nombre").active().all()
-
-        page = self.paginate_queryset(queryset)
-        if page is not None:
-            serializer = ProductoTipoSelectorSerializer(page, many=True)
-            return self.get_paginated_response(serializer.data)
-
+        queryset = ProductoTipo.objects.active().only("id", "nombre").all()
         serializer = ProductoTipoSelectorSerializer(queryset, many=True)
         return Response(serializer.data)
 
@@ -449,29 +442,56 @@ class LoteView(viewsets.ModelViewSet):
         return Response(serializer.data)
 
     def create(self, request, *args, **kwargs):
-        serializer = self.get_serializer(data=request.data)
-        serializer.is_valid(raise_exception=True)
-        
+        force_save_data = request.data.pop("force_save", False)
+
         try:
+            serializer = self.get_serializer(
+                data=request.data, context={"force_save": force_save_data}
+            )
+            serializer.is_valid(raise_exception=True)
             self.perform_create(serializer)
         except Exception as e:
+            if isinstance(e, serializers.ValidationError):
+                if "non_field_errors" in e.detail:
+                    errors = e.detail.get("non_field_errors") or []
+                    resultados = [item for item in errors if "Existencias" in item]
+                    return Response(
+                        {"msg": str(resultados[0])}, status=status.HTTP_400_BAD_REQUEST
+                    )
+
             return Response({"msg": str(e)}, status=status.HTTP_400_BAD_REQUEST)
-        
+
         headers = self.get_success_headers(serializer.data)
-        return Response(serializer.data, status=status.HTTP_201_CREATED, headers=headers)
+        return Response(
+            serializer.data, status=status.HTTP_201_CREATED, headers=headers
+        )
 
     def update(self, request, *args, **kwargs):
-        partial = kwargs.pop('partial', False)
+        force_save_data = request.data.pop("force_save", False)
+        partial = kwargs.pop("partial", False)
         instance = self.get_object()
-        serializer = self.get_serializer(instance, data=request.data, partial=partial)
-        serializer.is_valid(raise_exception=True)
-        
+
         try:
+            serializer = self.get_serializer(
+                instance,
+                data=request.data,
+                partial=partial,
+                context={"force_save": force_save_data},
+            )
+            serializer.is_valid(raise_exception=True)
             self.perform_update(serializer)
         except Exception as e:
+            if isinstance(e, serializers.ValidationError):
+                if "non_field_errors" in e.detail:
+                    errors = e.detail.get("non_field_errors") or []
+                    resultados = [item for item in errors if "Existencias" in item]
+                    return Response(
+                        {"msg": str(resultados[0])}, status=status.HTTP_400_BAD_REQUEST
+                    )
+
             return Response({"msg": str(e)}, status=status.HTTP_400_BAD_REQUEST)
 
-        if getattr(instance, '_prefetched_objects_cache', None):
+        if getattr(instance, "_prefetched_objects_cache", None):
             # If 'prefetch_related' has been applied to a queryset, we need to
             # forcibly invalidate the prefetch cache on the instance.
             instance._prefetched_objects_cache = {}
@@ -483,6 +503,7 @@ class LoteView(viewsets.ModelViewSet):
         instance.motivo = motivo
         instance.save()
         instance.delete()
+
 
 class StatisticsViewSet(viewsets.ModelViewSet):
     queryset = Producto.objects.all()
@@ -509,8 +530,10 @@ class StatisticsViewSet(viewsets.ModelViewSet):
         """
         Retorna el total de productos por marca.
         """
-        CountbyMarca = Producto.objects.active().values("marca__nombre").annotate(
-            total=Count("id")
+        CountbyMarca = (
+            Producto.objects.active()
+            .values("marca__nombre")
+            .annotate(total=Count("id"))
         )
         return Response(
             [
@@ -526,61 +549,106 @@ class StatisticsViewSet(viewsets.ModelViewSet):
         Retorna el valor total del inventario.
         """
         data = {
-            "total": 0, 
-            "semanal": { "actual": 0, "anterior": 0}, 
-            "mensual": { "actual": 0, "anterior": 0}, 
-            "anual": { "actual": 0, "anterior": 0}
+            "total": 0,
+            "semanal": {"actual": 0, "anterior": 0},
+            "mensual": {"actual": 0, "anterior": 0},
+            "anual": {"actual": 0, "anterior": 0},
         }
-        
+
         total_data = Lote.objects.active().aggregate(total=Sum("costo"))
         if total_data is not None and total_data["total"] is not None:
-            data['total'] = total_data["total"]
-        
+            data["total"] = total_data["total"]
+
         today = timezone.now()
         today_date = today.date()
 
         # Week data
         start_current_week = today_date - datetime.timedelta(days=today_date.weekday())
-        end_current_week = datetime.datetime.combine(start_current_week + datetime.timedelta(days=6), datetime.time.max)
+        end_current_week = datetime.datetime.combine(
+            start_current_week + datetime.timedelta(days=6), datetime.time.max
+        )
         start_last_week = start_current_week - datetime.timedelta(days=7)
-        end_last_week = datetime.datetime.combine(start_last_week + datetime.timedelta(days=6), datetime.time.max)
+        end_last_week = datetime.datetime.combine(
+            start_last_week + datetime.timedelta(days=6), datetime.time.max
+        )
 
-        current_week_data = Lote.objects.active().filter(fe_compra__range=[start_current_week, end_current_week]).aggregate(total=Sum("costo"))
-        last_week_data = Lote.objects.active().filter(fe_compra__range=[start_last_week, end_last_week]).aggregate(total=Sum("costo"))
-        
+        current_week_data = (
+            Lote.objects.active()
+            .filter(fe_compra__range=[start_current_week, end_current_week])
+            .aggregate(total=Sum("costo"))
+        )
+        last_week_data = (
+            Lote.objects.active()
+            .filter(fe_compra__range=[start_last_week, end_last_week])
+            .aggregate(total=Sum("costo"))
+        )
+
         if current_week_data is not None and current_week_data["total"] is not None:
-            data['semanal']['actual'] = current_week_data["total"]
+            data["semanal"]["actual"] = current_week_data["total"]
         if last_week_data is not None and last_week_data["total"] is not None:
-            data['semanal']['anterior'] = last_week_data["total"]
+            data["semanal"]["anterior"] = last_week_data["total"]
 
         # Month data
         start_current_month = today_date.replace(day=1)
-        end_current_month = datetime.datetime.combine(today_date.replace(day=calendar.monthrange(today_date.year, today_date.month)[1]), datetime.time.max)
-        start_last_month = start_current_month - datetime.timedelta(days=calendar.monthrange(today_date.year, today_date.month - 1)[1])
-        end_last_month = datetime.datetime.combine(start_last_month.replace(day=calendar.monthrange(today_date.year, today_date.month - 1)[1]), datetime.time.max)
-        
-        current_month_data = Lote.objects.active().filter(fe_compra__range=[start_current_month, end_current_month]).aggregate(total=Sum("costo"))
-        last_month_data = Lote.objects.active().filter(fe_compra__range=[start_last_month, end_last_month]).aggregate(total=Sum("costo"))
+        end_current_month = datetime.datetime.combine(
+            today_date.replace(
+                day=calendar.monthrange(today_date.year, today_date.month)[1]
+            ),
+            datetime.time.max,
+        )
+        start_last_month = start_current_month - datetime.timedelta(
+            days=calendar.monthrange(today_date.year, today_date.month - 1)[1]
+        )
+        end_last_month = datetime.datetime.combine(
+            start_last_month.replace(
+                day=calendar.monthrange(today_date.year, today_date.month - 1)[1]
+            ),
+            datetime.time.max,
+        )
+
+        current_month_data = (
+            Lote.objects.active()
+            .filter(fe_compra__range=[start_current_month, end_current_month])
+            .aggregate(total=Sum("costo"))
+        )
+        last_month_data = (
+            Lote.objects.active()
+            .filter(fe_compra__range=[start_last_month, end_last_month])
+            .aggregate(total=Sum("costo"))
+        )
 
         if current_month_data is not None and current_month_data["total"] is not None:
-            data['mensual']['actual'] = current_month_data["total"]
+            data["mensual"]["actual"] = current_month_data["total"]
         if last_month_data is not None and last_month_data["total"] is not None:
-            data['mensual']['anterior'] = last_month_data["total"]
+            data["mensual"]["anterior"] = last_month_data["total"]
 
         # Year data
         start_current_year = today_date.replace(month=1, day=1)
-        end_current_year = datetime.datetime.combine(today_date.replace(month=12, day=31), datetime.time.max)
+        end_current_year = datetime.datetime.combine(
+            today_date.replace(month=12, day=31), datetime.time.max
+        )
         start_last_year = start_current_year.replace(year=today_date.year - 1)
-        end_last_year = datetime.datetime.combine(today_date.replace(year=today_date.year - 1, month=12, day=31), datetime.time.max)
-        
-        current_year_data = Lote.objects.active().filter(fe_compra__range=[start_current_year, end_current_year]).aggregate(total=Sum("costo"))
-        last_year_data = Lote.objects.active().filter(fe_compra__range=[start_last_year, end_last_year]).aggregate(total=Sum("costo"))
-        
+        end_last_year = datetime.datetime.combine(
+            today_date.replace(year=today_date.year - 1, month=12, day=31),
+            datetime.time.max,
+        )
+
+        current_year_data = (
+            Lote.objects.active()
+            .filter(fe_compra__range=[start_current_year, end_current_year])
+            .aggregate(total=Sum("costo"))
+        )
+        last_year_data = (
+            Lote.objects.active()
+            .filter(fe_compra__range=[start_last_year, end_last_year])
+            .aggregate(total=Sum("costo"))
+        )
+
         if current_year_data is not None and current_year_data["total"] is not None:
-            data['anual']['actual'] = current_year_data["total"]
+            data["anual"]["actual"] = current_year_data["total"]
         if last_year_data is not None and last_year_data["total"] is not None:
-            data['anual']['anterior'] = last_year_data["total"]
-        
+            data["anual"]["anterior"] = last_year_data["total"]
+
         return Response(data)
 
     @action(detail=False, methods=["get"])
@@ -594,6 +662,7 @@ class StatisticsViewSet(viewsets.ModelViewSet):
     @action(detail=False, methods=["get"])
     def productos_mas_utilizados(self, request):
         from services.models import ServicioRealizadoProducto
+
         """
         Retorna una lista de los productos más utilizados (ordenados por usos).
         """
@@ -605,29 +674,39 @@ class StatisticsViewSet(viewsets.ModelViewSet):
 
         if period == "week":
             start_date = today_date - datetime.timedelta(days=today_date.weekday())
-            end_date = datetime.datetime.combine(start_date + datetime.timedelta(days=6), datetime.time.max)
+            end_date = datetime.datetime.combine(
+                start_date + datetime.timedelta(days=6), datetime.time.max
+            )
         elif period == "month":
             start_date = today_date.replace(day=1)
-            end_date = datetime.datetime.combine(today_date.replace(day=calendar.monthrange(today_date.year, today_date.month)[1]), datetime.time.max)
+            end_date = datetime.datetime.combine(
+                today_date.replace(
+                    day=calendar.monthrange(today_date.year, today_date.month)[1]
+                ),
+                datetime.time.max,
+            )
         elif period == "year":
             start_date = today_date.replace(month=1, day=1)
-            end_date = datetime.datetime.combine(today_date.replace(month=12, day=31), datetime.time.max)
+            end_date = datetime.datetime.combine(
+                today_date.replace(month=12, day=31), datetime.time.max
+            )
         else:
             return Response(
                 {"error": "Periodo no válido, use 'week', 'month' o 'year'"},
                 status=status.HTTP_400_BAD_REQUEST,
             )
-            
+
         productos_usados = (
-                ServicioRealizadoProducto.objects.active().filter(servicio_realizado__fecha__range=[start_date, end_date])
-                .values("producto__id", "producto__nombre", "producto__sku")
-                .annotate(usos=Sum("cantidad"))
-                .order_by("-usos")
-            )
+            ServicioRealizadoProducto.objects.active()
+            .filter(servicio_realizado__fecha__range=[start_date, end_date])
+            .values("producto__id", "producto__nombre", "producto__sku")
+            .annotate(usos=Sum("cantidad"))
+            .order_by("-usos")
+        )
 
         if strLimit:
-            productos_usados = productos_usados[:int(strLimit)]
-        
+            productos_usados = productos_usados[: int(strLimit)]
+
         serializer = ProductosMasUsadosSerializer(productos_usados, many=True)
         return Response(serializer.data)
 
@@ -636,22 +715,32 @@ class StatisticsViewSet(viewsets.ModelViewSet):
         """
         Retorna una lista de los lotes que están cerca de expirar.
         """
-        umbral_dias = int(request.query_params.get('umbral', 10))
+        umbral_dias = int(request.query_params.get("umbral", 10))
         fecha_actual = timezone.now()
         fecha_limite = fecha_actual + datetime.timedelta(days=umbral_dias)
-        
-        data = Lote.objects.active().filter(retirado=False, fe_exp__range=[fecha_actual, fecha_limite]).order_by("fe_exp")
+
+        data = (
+            Lote.objects.active()
+            .filter(retirado=False, fe_exp__range=[fecha_actual, fecha_limite])
+            .order_by("fe_exp")
+        )
         serializer = LoteAllSerializer(data, many=True)
         return Response(serializer.data)
-    
+
     @action(detail=False, methods=["get"])
     def productos_cerca_de_agotar(self, request):
         """
         Retorna una lista de los productos que están cerca de agotar sus existencias.
         """
-        umbral_existencias = int(request.query_params.get('umbral', 10))
-        
-        productos_cerca_de_agotar = Producto.objects.active().with_existencias().filter(existencias__range=[1, umbral_existencias])
-        
-        serializer = ProductoWithExistenciasSerializer(productos_cerca_de_agotar, many=True)
+        umbral_existencias = int(request.query_params.get("umbral", 10))
+
+        productos_cerca_de_agotar = (
+            Producto.objects.active()
+            .with_existencias()
+            .filter(existencias__range=[1, umbral_existencias])
+        )
+
+        serializer = ProductoWithExistenciasSerializer(
+            productos_cerca_de_agotar, many=True
+        )
         return Response(serializer.data)

@@ -15,9 +15,11 @@ from rest_framework.permissions import AllowAny
 from rest_framework.parsers import MultiPartParser, FormParser, JSONParser
 
 
+from core.serializers import ServicioEspecialidadSerializer
 from inventory.models import Producto
 from .models import (
     Servicio,
+    ServicioEspecialidad,
     ServicioRealizado,
     ServicioRealizadoProducto,
     ServicioEstado,
@@ -137,6 +139,12 @@ class ServicioView(viewsets.ModelViewSet):
         queryset = Servicio.objects.active().filter(pk__in=ids)
         queryset.delete()
         return Response(status=status.HTTP_200_OK)
+    
+    @action(methods=["get"], detail=False)
+    def get_especialidades(self, request: Request):
+        especialidades = ServicioEspecialidad.objects.active().all()
+        serializer = ServicioEspecialidadSerializer(especialidades, many=True)
+        return Response(serializer.data, status=status.HTTP_200_OK)
 
 
 class ServicioRealizadoView(viewsets.ModelViewSet):
